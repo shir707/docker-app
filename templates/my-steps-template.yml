@@ -1,0 +1,66 @@
+steps:            
+- task: CmdLine@2
+  inputs:
+    script: |
+      git clone https://github.com/shir707/ansibleProject.git
+  displayName: "git clone to ansible project"
+          
+- task: CmdLine@2
+  inputs:
+    script: |
+      cd $(system.artifactsdirectory)
+      cat <<EOF >.env
+      # Host configuration
+                        
+                PORT=8080
+                HOST=0.0.0.0
+                          
+                          
+                # Postgres
+                PGHOST=$(db_host)
+                PGUSERNAME=$(db_user_name)
+                PGDATABASE=$(db_name)
+                PGPASSWORD=$(db_pass)
+                PGPORT=$(db_port)
+                          
+                # Host Configurations
+                HOST_URL=http://$(public_ip):8080
+                COOKIE_ENCRYPT_PWD=superAwesomePasswordStringThatIsAtLeast32CharactersLong!
+                NODE_ENV=development
+                                     
+                # Okta configuration
+                           
+                OKTA_ORG_URL=$(okta_url)
+                OKTA_CLIENT_ID= $(okta_id)
+                OKTA_CLIENT_SECRET= $(okta_secret)
+                
+      EOF
+  displayName: "creating env file with varaibles"
+
+- task: Docker@2
+  inputs:
+    containerRegistry: 'shirRegistry'
+    command: 'login'
+          
+- task: CmdLine@2
+  inputs:
+    script: |
+      docker rm -f $(docker ps -aq)
+      docker create --name bootcamp shirregistry.azurecr.io/$(imageRepository):$(tag)
+  displayName: 'creating new bootcamp container'
+          
+- task: CmdLine@2
+  inputs:
+    script: 'docker cp $(system.artifactsdirectory)/.env bootcamp:/bootcamp-app/.env'
+  displayName: 'copy env file into bootcamp container'
+          
+- task: CmdLine@2
+  inputs:
+    script: 'docker commit bootcamp shirregistry.azurecr.io/$(imageRepository):$(tag)'
+  displayName: 'commit new image'
+          
+- task: CmdLine@2
+  inputs:
+    script: 'docker save -o ./bootcamp.zip shirregistry.azurecr.io/$(imageRepository):$(tag)'
+    workingDirectory: '$(system.artifactsdirectory)'
+  displayName: 'creating zip file from image'
