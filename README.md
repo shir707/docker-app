@@ -1,4 +1,4 @@
-# Node.js Weight Tracker
+# Node.js Weight Tracker with docker image
 
 ##General info <br />
 *This is a CI/CD pipeline for deploying docker image of the application "Weight Tracker", and store it in azure container registry.<br />
