@@ -16,8 +16,5 @@ EXPOSE 8080
 #run tests if present
 CMD ["npm","run","test", "--if-present"]
 
-##initialize the db
-CMD ["npm","init","db"]
-
-#start the app in PID1 
-ENTRYPOINT [ "npm","run","dev" ]
+#intialize db and start the app in PID1 
+ENTRYPOINT ["/bin/sh", "-c" , "npm run initdb && npm run dev"]
