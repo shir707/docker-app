@@ -1,0 +1,99 @@
+# Docker
+# Build and push an image to Azure Container Registry
+# https://docs.microsoft.com/azure/devops/pipelines/languages/docker
+
+trigger:
+- master
+- feature
+
+resources:
+- repo: self
+
+variables:
+  # Container registry service connection established during pipeline creation
+  dockerRegistryServiceConnection: '3be66970-c937-4085-b728-61127d6a5402'
+  imageRepository: 'bootcampdocker'
+  containerRegistry: 'shirregistry.azurecr.io'
+  dockerfilePath: '$(Build.SourcesDirectory)/Dockerfile'
+  tag: '$(Build.BuildId)'
+
+stages:
+- stage: Build
+  displayName: Build and push stage
+  jobs:
+  - job: Build
+    displayName: Build
+    pool:
+      name: "myPoll"
+    steps:
+    - task: Docker@2
+      inputs:
+        containerRegistry: $(dockerRegistryServiceConnection)
+        repository: $(imageRepository)
+        command: 'build'
+        Dockerfile: $(dockerfilePath)
+        buildContext: '**'
+        tags: $(tag)
+    
+    - task: Docker@2
+      inputs:
+        containerRegistry: $(dockerRegistryServiceConnection)
+        repository: $(imageRepository)
+        command: 'push'
+        tags: $(tag)
+      condition: and(succeeded(), eq(variables['build.sourceBranch'], 'refs/heads/master'))
+
+- stage: 'Staging' 
+  condition: and(succeeded(), eq(variables['build.sourceBranch'], 'refs/heads/master'))
+  variables:
+  - group: stageGroup
+  displayName: 'Staging'
+  dependsOn: ['Build'] 
+  jobs:
+  - deployment: Deploy_Staging 
+    displayName: Staging Deployment 
+    pool:
+      name: "myPoll" 
+    environment: Staging
+    strategy:
+      runOnce:
+        deploy:
+         steps:          
+          - template: templates/my-steps-template.yml
+
+          - task: Ansible@0
+            inputs:
+              ansibleInterface: 'agentMachine'
+              playbookPathOnAgentMachine: 'ansibleProject/main.yml'
+              inventoriesAgentMachine: 'file'
+              inventoryFileOnAgentMachine: 'ansibleProject/inventories/stage'
+              args: '--extra-vars server_env_group="stageServers" --verbose'
+              failOnStdErr: false
+
+- stage: 'Production'
+  condition: and(succeeded(), eq(variables['build.sourceBranch'], 'refs/heads/master'))
+  variables:
+  - group: prodGroup 
+  displayName: 'Production'
+  dependsOn: ['Build', 'Staging']
+  jobs:
+  - deployment: Deploy_Production 
+    displayName: Production Deployment 
+    pool:
+      name: "poolProd"
+    environment: Production
+    strategy:
+      runOnce:
+       deploy:
+          steps:
+          - template: templates/my-steps-template.yml
+          - task: Ansible@0
+            inputs:
+              ansibleInterface: 'agentMachine'
+              playbookPathOnAgentMachine: 'ansibleProject/main.yml'
+              inventoriesAgentMachine: 'file'
+              inventoryFileOnAgentMachine: 'ansibleProject/inventories/prod'
+              args: '--extra-vars server_env_group="prodServers" --verbose'
+              failOnStdErr: false
+
+          
